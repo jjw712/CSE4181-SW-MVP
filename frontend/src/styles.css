@@ -1,6 +1,6 @@
 :root {
   color: #172026;
-  background: #f5f7f8;
+  background: #f4f6f7;
   font-family:
     Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -14,16 +14,27 @@ body {
 }
 
 button,
+input,
 textarea {
   font: inherit;
+}
+
+a {
+  color: #24685d;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
 }
 
 .app-shell {
   display: grid;
   gap: 20px;
-  width: min(1040px, calc(100% - 32px));
+  width: min(1180px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 48px 0;
+  padding: 40px 0;
 }
 
 .intro {
@@ -35,19 +46,20 @@ textarea {
   margin: 0;
   color: #2b6f62;
   font-size: 0.85rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0;
   text-transform: uppercase;
 }
 
 h1,
 h2,
+h3,
 p {
   margin: 0;
 }
 
 h1 {
-  font-size: clamp(2rem, 4vw, 3.5rem);
+  font-size: clamp(2rem, 4vw, 3.3rem);
   line-height: 1.1;
 }
 
@@ -55,10 +67,14 @@ h2 {
   font-size: 1.15rem;
 }
 
-p {
-  max-width: 760px;
-  color: #53636f;
-  line-height: 1.7;
+h3 {
+  font-size: 0.95rem;
+}
+
+p,
+li {
+  color: #4f5f6a;
+  line-height: 1.65;
 }
 
 .panel {
@@ -70,38 +86,202 @@ p {
   background: #ffffff;
 }
 
+.muted-panel {
+  border-style: dashed;
+}
+
+.form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field-wide {
+  grid-column: 1 / -1;
+}
+
 label {
-  font-weight: 700;
+  color: #26343c;
+  font-weight: 800;
+}
+
+input,
+textarea {
+  width: 100%;
+  border: 1px solid #b8c6ce;
+  border-radius: 6px;
+  padding: 11px 12px;
+  color: #172026;
+  background: #ffffff;
 }
 
 textarea {
-  width: 100%;
-  min-height: 140px;
+  min-height: 130px;
   resize: vertical;
-  border: 1px solid #b8c6ce;
-  border-radius: 6px;
-  padding: 12px;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toggle input {
+  width: auto;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
 }
 
 button {
-  justify-self: start;
   border: 0;
   border-radius: 6px;
-  padding: 10px 14px;
+  padding: 11px 16px;
   color: #ffffff;
   background: #2b6f62;
-  cursor: not-allowed;
+  cursor: pointer;
 }
 
-.section-list {
+button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.error {
+  color: #a13a2f;
+  font-weight: 700;
+}
+
+.results {
+  display: grid;
+  gap: 20px;
+}
+
+.summary-band {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  border-left: 5px solid #2b6f62;
+  background: #eaf2ef;
+}
+
+.meta-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px;
-  margin: 0;
-  padding-left: 20px;
-  color: #30414c;
+  gap: 12px;
 }
 
-.section-list li {
-  line-height: 1.5;
+.meta-block {
+  display: grid;
+  gap: 6px;
+}
+
+.meta-block ul {
+  padding-left: 18px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  margin-right: 8px;
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: #173d36;
+  background: #cfe4dc;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.confidence-high {
+  color: #123d2a;
+  background: #bfe8cf;
+}
+
+.confidence-medium {
+  color: #51400f;
+  background: #f1e1a6;
+}
+
+.confidence-low {
+  color: #6b2f29;
+  background: #f4c7bf;
+}
+
+.query-grid,
+.report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.query-group {
+  display: grid;
+  gap: 8px;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.source-list {
+  display: grid;
+  gap: 12px;
+  padding-left: 0;
+  list-style: none;
+}
+
+.source-list li {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e7ecef;
+}
+
+.source-list li:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.source-list span,
+.evidence,
+.muted {
+  color: #6b7b86;
+  font-size: 0.92rem;
+}
+
+.evidence span {
+  color: #30414c;
+  font-weight: 700;
+}
+
+.pest-panel {
+  grid-column: 1 / -1;
+}
+
+.pest-block {
+  display: grid;
+  gap: 8px;
+  padding: 14px 0;
+  border-top: 1px solid #e7ecef;
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    width: min(100% - 24px, 1180px);
+    padding: 24px 0;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
