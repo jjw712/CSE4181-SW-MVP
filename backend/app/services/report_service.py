@@ -10,8 +10,13 @@ from app.core.config import Settings
 from app.report.confidence import calculate_confidence
 from app.report.generator import generate_report_body
 from app.schemas.report import GeneratedQueries, IdeaRequest, ReportResponse, SourceItem
-from app.services.llm import is_llm_configured
+from app.services.llm import (
+    expand_queries_with_gemini,
+    is_llm_configured,
+    summarize_report_with_gemini,
+)
 from app.services.query_generator import generate_queries
+from app.services.source_quality import annotate_source_relevance
 from app.services.source_normalizer import normalize_sources
 
 
@@ -25,6 +30,17 @@ def build_report(payload: IdeaRequest, settings: Settings) -> ReportResponse:
     collector_errors: dict[str, str] = {}
     llm_configured = is_llm_configured(settings)
     llm_used = False
+    llm_errors: list[str] = []
+
+    if llm_configured and payload.use_live_collectors:
+        queries, query_llm_used, query_llm_error = expand_queries_with_gemini(
+            payload,
+            queries,
+            settings,
+        )
+        llm_used = llm_used or query_llm_used
+        if query_llm_error:
+            llm_errors.append(f"query_expansion: {query_llm_error}")
 
     if payload.use_live_collectors:
         tasks = _public_collector_tasks(payload, queries, settings)
@@ -37,14 +53,29 @@ def build_report(payload: IdeaRequest, settings: Settings) -> ReportResponse:
     else:
         skipped_collectors.append("live_collectors_disabled")
 
-    if llm_configured:
-        skipped_collectors.append("llm_not_implemented")
-    else:
+    if not llm_configured:
         skipped_collectors.append("llm")
 
     failed_collectors = list(collector_errors)
-    sources = normalize_sources(raw_sources)
-    report = generate_report_body(sources)
+    sources = annotate_source_relevance(payload, normalize_sources(raw_sources))
+    fallback_report = generate_report_body(payload, queries, sources)
+    report = fallback_report
+
+    if llm_configured:
+        report, summary_llm_used, summary_llm_error = summarize_report_with_gemini(
+            payload,
+            queries,
+            sources,
+            fallback_report,
+            settings,
+        )
+        llm_used = llm_used or summary_llm_used
+        if summary_llm_error:
+            llm_errors.append(f"summary: {summary_llm_error}")
+
+    if llm_configured and not llm_used and llm_errors:
+        skipped_collectors.append("llm_failed")
+
     meta = calculate_confidence(
         sources=sources,
         skipped_collectors=skipped_collectors,
@@ -52,6 +83,9 @@ def build_report(payload: IdeaRequest, settings: Settings) -> ReportResponse:
         collector_errors=collector_errors,
         llm_used=llm_used,
         live_collectors_used=payload.use_live_collectors,
+        llm_provider=settings.llm_provider if llm_configured else None,
+        llm_model=settings.gemini_model if llm_configured else None,
+        llm_error="; ".join(llm_errors) if llm_errors else None,
     )
 
     return ReportResponse(

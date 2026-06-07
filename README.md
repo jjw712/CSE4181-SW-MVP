@@ -13,8 +13,8 @@
 - Naver DataLab 기반 검색 관심도 확인
 - Apple iTunes Search API 기반 iOS 경쟁 앱 후보 검색
 - Naver News API, GDELT, Hacker News, GitHub 기반 PEST 신호 수집
-- Gemma 기반 검색어 보강 및 출처 요약
-- LLM 토큰이 없을 때 사용하는 임시 rule fallback
+- Gemini 2.5 Flash 기반 검색어 보강 및 출처 요약
+- Gemini API key가 없거나 호출이 실패할 때 사용하는 rule fallback
 - JSON 리포트 반환
 - 프론트엔드 카드 출력
 
@@ -41,11 +41,11 @@
 | 대체재 | 사용자가 현재 쓰는 우회 방법 확인 |
 | PEST | 정치, 경제, 사회, 기술 환경 신호 확인 |
 
-검색어는 템플릿으로 먼저 만들고, 필요하면 Gemma로 동의어, 영문 표현, 서비스 유형별 표현을 보강합니다. 최종 검색어는 중복 제거와 카테고리별 개수 제한을 거칩니다.
+검색어는 템플릿으로 먼저 만들고, 필요하면 Gemini 2.5 Flash로 동의어, 영문 표현, 서비스 유형별 표현을 보강합니다. 최종 검색어는 중복 제거와 카테고리별 개수 제한을 거칩니다.
 
-MVP에서는 템플릿 기반 검색어 생성을 기본 구현으로 둡니다. Gemma 기반 보강은 검색 품질을 높이기 위한 선택 단계입니다.
+MVP에서는 템플릿 기반 검색어 생성을 기본 구현으로 두고, `ENABLE_LLM=true`와 `GEMINI_API_KEY`가 설정된 경우 Gemini 2.5 Flash로 검색어를 보강합니다.
 
-현재는 LLM 토큰을 확보하지 못한 상황을 고려해 임시로 rule 기반 fallback을 둡니다. 이 fallback은 개발과 시연을 막지 않기 위한 장치이며, 프로젝트 방향은 README에 정의한 Gemma 기반 검색어 보강 및 출처 요약을 구현하는 것입니다. Gemma를 사용하는 경우에도 검색어 보강과 요약에만 사용합니다. 출처 없는 내용은 리포트 근거로 쓰지 않습니다.
+Gemini 2.5 Flash는 검색어 보강과 출처 기반 요약에만 사용합니다. API key가 없거나 호출이 실패하면 rule 기반 fallback으로 리포트를 생성합니다. 출처 없는 내용은 리포트 근거로 쓰지 않습니다.
 
 ## 데이터 소스
 
@@ -58,7 +58,7 @@ MVP에서는 템플릿 기반 검색어 생성을 기본 구현으로 둡니다.
 | GDELT | 글로벌 뉴스 기반 PEST 신호 수집 | 기본 사용 |
 | Hacker News Algolia API | 개발자/스타트업 커뮤니티 반응 확인 | 기본 사용 |
 | GitHub REST API | 관련 오픈소스, API, 기술 생태계 확인 | 기본 사용, token은 선택 |
-| OpenAI web_search | 자동 심화 조사 | 선택 기능 |
+| Gemini Google Search grounding | 자동 심화 조사 | 추후 선택 기능, 기본 비활성화 |
 | Google Trends | PEST의 사회/경제 신호 보완 | 추후 |
 | Google Play 데이터 | Android 경쟁 앱 보완 | 추후 |
 | 리뷰 수집 도구 | 사용자 불만 분석 | 추후 |
@@ -77,7 +77,7 @@ Naver News API는 Naver Search API의 news endpoint를 사용합니다.
 
 가벼운 트렌드 감지는 별도 기능으로 분리하지 않고 PEST 내부의 `signals`로 다룹니다. PEST 결과도 다른 리포트 항목과 마찬가지로 출처가 있는 내용만 요약합니다.
 
-OpenAI `web_search`는 호출 비용이 발생하므로 기본 기능에서 제외합니다. 필요한 경우에만 옵션으로 켜고, 호출 횟수 제한과 캐싱을 둡니다.
+Gemini Google Search grounding은 호출 비용과 추가 token 사용이 발생할 수 있으므로 기본 기능에서 제외합니다. 필요한 경우에만 옵션으로 켜고, 호출 횟수 제한과 캐싱을 둡니다.
 
 ## 처리 흐름
 
@@ -86,8 +86,8 @@ User Input
   -> Query Generator
   -> Data Collectors (parallel)
   -> Source Normalizer
-  -> Gemma Summary
-  -> Temporary Rule Fallback
+  -> Gemini 2.5 Flash Summary
+  -> Rule Fallback if needed
   -> JSON Report
   -> Frontend Cards
 ```
@@ -114,12 +114,23 @@ User Input
     "pest": []
   },
   "report": {
-    "customer_problem": {
+    "idea_summary": {
       "summary": "",
       "evidence": [],
       "unverified": []
     },
-    "market_signals": {
+    "target_users": {
+      "summary": "",
+      "evidence": [],
+      "unverified": []
+    },
+    "related_keywords": {
+      "summary": "",
+      "keywords": [],
+      "evidence": [],
+      "unverified": []
+    },
+    "search_demand": {
       "summary": "",
       "evidence": [],
       "unverified": []
@@ -129,42 +140,38 @@ User Input
       "evidence": [],
       "unverified": []
     },
-    "pricing": {
+    "review_pain_points": {
       "summary": "",
       "evidence": [],
       "unverified": []
     },
-    "implementation": {
+    "monetization": {
+      "summary": "",
+      "evidence": [],
+      "unverified": []
+    },
+    "mvp_scope": {
+      "summary": "",
       "apis": [],
+      "mvp_features": [],
       "technical_constraints": [],
       "evidence": [],
       "unverified": []
     },
-    "pest": {
-      "political": {
-        "summary": "",
-        "signals": [],
-        "evidence": [],
-        "unverified": []
-      },
-      "economic": {
-        "summary": "",
-        "signals": [],
-        "evidence": [],
-        "unverified": []
-      },
-      "social": {
-        "summary": "",
-        "signals": [],
-        "evidence": [],
-        "unverified": []
-      },
-      "technological": {
-        "summary": "",
-        "signals": [],
-        "evidence": [],
-        "unverified": []
-      }
+    "risks": {
+      "summary": "",
+      "evidence": [],
+      "unverified": []
+    },
+    "recommendation": {
+      "summary": "",
+      "evidence": [],
+      "unverified": []
+    },
+    "data_confidence": {
+      "summary": "",
+      "evidence": [],
+      "unverified": []
     },
     "unknowns": []
   },
@@ -173,6 +180,8 @@ User Input
 ```
 
 각 요약은 가능한 한 `source_id`와 연결합니다. 확인되지 않은 내용은 `unverified` 또는 `unknowns`에 넣습니다.
+
+현재 MVP에서 완전히 구현하기 어렵거나 외부 정책/공식 API 제약이 있는 항목은 [docs/limitations.md](docs/limitations.md)에 따로 정리합니다.
 
 ## 하지 않는 것
 
@@ -190,7 +199,7 @@ User Input
 - Frontend: React + Vite
 - Backend: FastAPI
 - Database: SQLite 또는 PostgreSQL
-- LLM API: Gemma 기반 검색어 보강, 요약, JSON 구조화
+- LLM API: Gemini 2.5 Flash 기반 검색어 보강, 요약, JSON 구조화
 - External APIs:
   - Naver Search API
   - Naver News API
@@ -199,7 +208,7 @@ User Input
   - GDELT
   - Hacker News Algolia API
   - GitHub REST API
-  - optional OpenAI web_search
+  - optional Gemini Google Search grounding
 
 ## 폴더 구조
 
@@ -254,20 +263,25 @@ cd backend
 
 ## 환경 변수
 
-현재 구현은 LLM 토큰이 없어도 개발과 시연이 가능하도록 임시 fallback을 제공합니다. 다만 프로젝트 목표는 Gemma 기반 검색어 보강과 출처 요약을 구현하는 것입니다. API key를 설정하면 더 많은 collector와 Gemma 보강 기능을 사용할 수 있도록 확장합니다.
+현재 구현은 Gemini API token이 없어도 개발과 시연이 가능하도록 rule fallback을 제공합니다. `ENABLE_LLM=true`와 `GEMINI_API_KEY`를 설정하면 Gemini 2.5 Flash 기반 검색어 보강과 출처 요약을 사용합니다.
 
 Backend는 project root의 `.env`와 `backend/.env`를 모두 읽습니다. 같은 변수가 둘 다 있으면 `backend/.env` 값이 우선됩니다. Frontend의 `VITE_API_BASE_URL`은 `frontend/.env`에 둘 수 있습니다.
 
 | 변수 | 필수 여부 | 설명 |
 | --- | --- | --- |
-| `OPENAI_API_KEY` | 선택 | Gemma 또는 LLM provider 연동 시 검색어 보강, 요약에 사용 |
-| `ENABLE_LLM` | 선택 | Gemma/LLM 사용 여부. 현재 기본값은 `false` |
+| `GEMINI_API_KEY` | 선택 | Gemini 2.5 Flash 기반 검색어 보강, 요약에 사용 |
+| `GEMINI_MODEL` | 선택 | 사용할 Gemini model. 기본값은 `gemini-2.5-flash` |
+| `LLM_PROVIDER` | 선택 | LLM provider. 기본값은 `gemini` |
+| `ENABLE_LLM` | 선택 | Gemini 2.5 Flash 사용 여부. 현재 기본값은 `false` |
+| `LLM_MAX_INPUT_SOURCES` | 선택 | Gemini 요약에 전달할 최대 source 수. token 절약용 |
+| `LLM_MAX_CHARS_PER_SOURCE` | 선택 | source 1개당 Gemini에 전달할 최대 글자 수. token 절약용 |
+| `LLM_MAX_OUTPUT_TOKENS` | 선택 | Gemini 응답 최대 token 수. token 절약용 |
 | `NAVER_CLIENT_ID` | 선택 | Naver Search API와 Naver DataLab 호출에 사용 |
 | `NAVER_CLIENT_SECRET` | 선택 | Naver Search API와 Naver DataLab 호출에 사용 |
 | `DATABASE_URL` | 선택 | 데이터베이스 연결 문자열. 없으면 로컬 SQLite 사용 |
 | `GITHUB_TOKEN` | 선택 | GitHub REST API rate limit 완화에 사용 |
-| `ENABLE_OPENAI_WEB_SEARCH` | 선택 | OpenAI `web_search` 사용 여부. 기본값은 `false` |
-| `WEB_SEARCH_MAX_CALLS_PER_REPORT` | 선택 | 리포트 1개당 OpenAI `web_search` 최대 호출 수 |
+| `ENABLE_GOOGLE_SEARCH_GROUNDING` | 선택 | Gemini Google Search grounding 사용 여부. 기본값은 `false` |
+| `GOOGLE_SEARCH_GROUNDING_MAX_CALLS_PER_REPORT` | 선택 | 리포트 1개당 grounding 최대 호출 수 |
 | `VITE_API_BASE_URL` | 선택 | Frontend에서 호출할 backend URL. 기본값은 `http://127.0.0.1:8000` |
 
 `.env` 파일은 commit하지 않습니다. 필요한 변수 이름만 `.env.example`, `backend/.env.example`, `frontend/.env.example`에 적습니다.
@@ -280,8 +294,17 @@ Backend는 project root의 `.env`와 `backend/.env`를 모두 읽습니다. 같�
 - Hacker News와 GitHub 데이터는 개발자/기술 커뮤니티 신호이며 일반 소비자 수요와 다를 수 있습니다.
 - SNS 데이터는 API 비용, 권한 승인, 정책 제약이 크므로 MVP 기본 수집 대상에서 제외합니다.
 - Google Play와 리뷰 데이터는 공식 API 제약과 정책 리스크가 있을 수 있습니다.
-- Gemma/LLM 출력은 요약과 구조화 용도입니다. 사실 데이터처럼 표시하지 않습니다.
+- Gemini 2.5 Flash 출력은 요약과 구조화 용도입니다. 사실 데이터처럼 표시하지 않습니다.
 - 리포트는 결론보다 출처, 근거, 확인 안 된 부분을 함께 보여주는 데 초점을 둡니다.
+
+## Gemini token 절약 원칙
+
+- 리포트 1개당 Gemini 호출은 기본적으로 검색어 보강 1회, 출처 요약 1회로 제한합니다.
+- Gemini에는 전체 외부 API 응답을 그대로 보내지 않고, 정규화된 `source_id`, `title`, `snippet`, `source_type`, `category`만 보냅니다.
+- source는 confidence와 category coverage를 기준으로 상위 일부만 전달합니다.
+- source 1개당 전달 글자 수를 제한합니다.
+- 출력은 정해진 JSON 구조에 맞는 짧은 요약 중심으로 제한합니다.
+- Google Search grounding은 기본 비활성화하고, collector 데이터가 부족할 때만 선택적으로 사용합니다.
 
 ## 커밋 메시지
 

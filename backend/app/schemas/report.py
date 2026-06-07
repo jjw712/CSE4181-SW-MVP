@@ -40,6 +40,10 @@ class ReportSection(BaseModel):
     unverified: list[str] = Field(default_factory=list)
 
 
+class KeywordSection(ReportSection):
+    keywords: list[str] = Field(default_factory=list)
+
+
 class CompetitorItem(BaseModel):
     app_name: str
     url: str
@@ -57,7 +61,9 @@ class CompetitorsSection(BaseModel):
 
 
 class ImplementationSection(BaseModel):
+    summary: str = ""
     apis: list[str] = Field(default_factory=list)
+    mvp_features: list[str] = Field(default_factory=list)
     technical_constraints: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
     unverified: list[str] = Field(default_factory=list)
@@ -78,12 +84,17 @@ class PestSection(BaseModel):
 
 
 class ReportBody(BaseModel):
-    customer_problem: ReportSection
-    market_signals: ReportSection
+    idea_summary: ReportSection
+    target_users: ReportSection
+    related_keywords: KeywordSection
+    search_demand: ReportSection
     competitors: CompetitorsSection
-    pricing: ReportSection
-    implementation: ImplementationSection
-    pest: PestSection
+    review_pain_points: ReportSection
+    monetization: ReportSection
+    mvp_scope: ImplementationSection
+    risks: ReportSection
+    recommendation: ReportSection
+    data_confidence: ReportSection
     unknowns: list[str] = Field(default_factory=list)
 
 
@@ -91,6 +102,9 @@ class ReportMeta(BaseModel):
     confidence_level: Literal["High", "Medium", "Low"]
     confidence_reasons: list[str] = Field(default_factory=list)
     llm_used: bool = False
+    llm_provider: str | None = None
+    llm_model: str | None = None
+    llm_error: str | None = None
     live_collectors_used: bool = False
     skipped_collectors: list[str] = Field(default_factory=list)
     failed_collectors: list[str] = Field(default_factory=list)

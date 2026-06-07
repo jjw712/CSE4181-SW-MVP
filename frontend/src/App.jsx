@@ -16,12 +16,26 @@ const initialForm = {
 const queryLabels = {
   customer_problem: "고객 문제",
   market: "시장/수요",
-  competitors: "경쟁자",
+  competitors: "경쟁 앱",
   pricing: "가격/수익화",
   implementation: "구현/API",
   alternatives: "대체재",
   pest: "PEST",
 };
+
+const reportSections = [
+  ["idea_summary", "아이디어 요약"],
+  ["target_users", "타깃 사용자"],
+  ["related_keywords", "관련 키워드"],
+  ["search_demand", "검색 수요 분석"],
+  ["competitors", "경쟁 앱 분석"],
+  ["review_pain_points", "리뷰 기반 사용자 불만"],
+  ["monetization", "수익화 구조"],
+  ["mvp_scope", "1인 MVP 구현 범위"],
+  ["risks", "리스크 요약"],
+  ["recommendation", "추천 방향"],
+  ["data_confidence", "데이터 신뢰도"],
+];
 
 function App() {
   const [form, setForm] = useState(initialForm);
@@ -70,8 +84,8 @@ function App() {
         <p className="eyebrow">CSE4181-SW-MVP</p>
         <h1>앱 아이디어 검증 리포트</h1>
         <p>
-          검색어를 만들고 공개 source를 수집해 근거 중심의 MVP 조사 리포트를
-          생성합니다.
+          검색어를 만들고 공개 source를 수집해 시작, pivot, scope-down, 추가 조사 여부를
+          판단할 수 있는 표준 리포트를 생성합니다.
         </p>
       </section>
 
@@ -90,7 +104,7 @@ function App() {
         </div>
 
         <div className="field">
-          <label htmlFor="target_customer">타겟 고객</label>
+          <label htmlFor="target_customer">타깃 고객</label>
           <input
             id="target_customer"
             name="target_customer"
@@ -163,55 +177,57 @@ function EmptyState() {
   return (
     <section className="panel muted-panel">
       <h2>대기 중</h2>
-      <p>아이디어를 입력하면 검색어, report section, source 목록이 표시됩니다.</p>
+      <p>아이디어를 입력하면 11개 리포트 섹션, source, confidence metadata가 표시됩니다.</p>
     </section>
   );
 }
 
 function ReportView({ report }) {
   const { meta, generated_queries: queries, report: body, sources } = report;
+  const llmLabel = meta.llm_used
+    ? `Gemini 사용${meta.llm_model ? ` · ${meta.llm_model}` : ""}`
+    : "Rule fallback";
 
   return (
     <section className="results">
       <div className="summary-band">
-        <div>
+        <div className="badge-row">
           <span className={`badge confidence-${meta.confidence_level.toLowerCase()}`}>
             Confidence {meta.confidence_level}
           </span>
-          <span className="badge">{meta.llm_used ? "LLM 사용" : "Rule 기반"}</span>
+          <span className="badge">{llmLabel}</span>
         </div>
         <p>{meta.confidence_reasons.join(" · ")}</p>
         <MetaStatus meta={meta} />
       </div>
 
-      <section className="panel">
-        <h2>생성된 검색어</h2>
+      <details className="panel query-panel">
+        <summary>생성된 검색어</summary>
         <div className="query-grid">
           {Object.entries(queries).map(([key, values]) => (
             <div className="query-group" key={key}>
               <h3>{queryLabels[key] || key}</h3>
-              <ul>
+              <div className="chip-list">
                 {values.map((value) => (
-                  <li key={value}>{value}</li>
+                  <span className="chip" key={value}>
+                    {value}
+                  </span>
                 ))}
-              </ul>
+              </div>
             </div>
           ))}
         </div>
-      </section>
+      </details>
 
       <section className="report-grid">
-        <ReportSection title="고객 문제" section={body.customer_problem} />
-        <ReportSection title="시장 신호" section={body.market_signals} />
-        <CompetitorSection section={body.competitors} />
-        <ReportSection title="가격/수익화" section={body.pricing} />
-        <ImplementationSection section={body.implementation} />
-        <PestSection section={body.pest} />
+        {reportSections.map(([key, title]) => (
+          <ReportCard key={key} title={title} section={body[key]} type={key} />
+        ))}
       </section>
 
       <section className="panel">
         <h2>Unknowns</h2>
-        <List items={body.unknowns} emptyText="현재 추가 unknown은 없습니다." />
+        <List items={body.unknowns} emptyText="현재 rule 기준에서 추가 unknown은 감지되지 않았습니다." />
       </section>
 
       <section className="panel">
@@ -224,22 +240,33 @@ function ReportView({ report }) {
 
 function MetaStatus({ meta }) {
   const collectorErrors = Object.entries(meta.collector_errors || {});
+  const llmItems = [
+    meta.llm_provider ? `provider: ${meta.llm_provider}` : "",
+    meta.llm_model ? `model: ${meta.llm_model}` : "",
+    meta.llm_error ? `fallback: ${friendlyError(meta.llm_error)}` : "",
+  ].filter(Boolean);
 
-  if (!meta.skipped_collectors.length && !meta.failed_collectors.length && !collectorErrors.length) {
+  if (
+    !meta.skipped_collectors.length &&
+    !meta.failed_collectors.length &&
+    !collectorErrors.length &&
+    !llmItems.length
+  ) {
     return null;
   }
 
   return (
     <div className="meta-grid">
+      <MetaList title="LLM" items={llmItems} />
       <MetaList title="Skipped" items={meta.skipped_collectors} />
-      <MetaList title="Failed" items={meta.failed_collectors} />
+      <MetaList title="Failed" items={meta.failed_collectors.map(friendlyCollectorName)} />
       {collectorErrors.length ? (
         <div className="meta-block">
           <h3>Collector errors</h3>
           <ul>
             {collectorErrors.map(([name, message]) => (
               <li key={name}>
-                <strong>{name}</strong>: {message}
+                <strong>{friendlyCollectorName(name)}</strong>: {friendlyError(message)}
               </li>
             ))}
           </ul>
@@ -266,23 +293,36 @@ function MetaList({ title, items }) {
   );
 }
 
-function ReportSection({ title, section }) {
+function ReportCard({ title, section, type }) {
+  if (!section) {
+    return null;
+  }
+
+  if (type === "competitors") {
+    return <CompetitorSection title={title} section={section} />;
+  }
+
+  if (type === "mvp_scope") {
+    return <MvpScopeSection title={title} section={section} />;
+  }
+
   return (
-    <article className="panel">
+    <article className="panel report-card">
       <h2>{title}</h2>
       <p>{section.summary}</p>
+      {section.keywords?.length ? <ChipList items={section.keywords} /> : null}
       <Evidence evidence={section.evidence} />
       <List title="Unverified" items={section.unverified} emptyText="" />
     </article>
   );
 }
 
-function CompetitorSection({ section }) {
+function CompetitorSection({ title, section }) {
   return (
-    <article className="panel">
-      <h2>경쟁 앱</h2>
+    <article className="panel report-card">
+      <h2>{title}</h2>
       {section.items.length ? (
-        <ul className="source-list">
+        <ul className="source-list compact-source-list">
           {section.items.map((item) => (
             <li key={item.source_id}>
               <a href={item.url} target="_blank" rel="noreferrer">
@@ -305,10 +345,12 @@ function CompetitorSection({ section }) {
   );
 }
 
-function ImplementationSection({ section }) {
+function MvpScopeSection({ title, section }) {
   return (
-    <article className="panel">
-      <h2>구현/API</h2>
+    <article className="panel report-card">
+      <h2>{title}</h2>
+      <p>{section.summary}</p>
+      <List title="MVP 기능 범위" items={section.mvp_features} emptyText="MVP 기능 후보가 없습니다." />
       <List title="API 후보" items={section.apis} emptyText="확인된 API 후보가 없습니다." />
       <List
         title="기술 제약"
@@ -317,22 +359,6 @@ function ImplementationSection({ section }) {
       />
       <Evidence evidence={section.evidence} />
       <List title="Unverified" items={section.unverified} emptyText="" />
-    </article>
-  );
-}
-
-function PestSection({ section }) {
-  return (
-    <article className="panel pest-panel">
-      <h2>PEST</h2>
-      {Object.entries(section).map(([key, value]) => (
-        <div className="pest-block" key={key}>
-          <h3>{key}</h3>
-          <p>{value.summary}</p>
-          <List items={value.signals} emptyText="" />
-          <Evidence evidence={value.evidence} />
-        </div>
-      ))}
     </article>
   );
 }
@@ -366,6 +392,18 @@ function List({ title, items, emptyText }) {
   );
 }
 
+function ChipList({ items }) {
+  return (
+    <div className="chip-list">
+      {items.map((item) => (
+        <span className="chip" key={item}>
+          {item}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function SourceList({ sources }) {
   if (!sources.length) {
     return <p>연결된 source가 없습니다. API key 또는 네트워크 상태를 확인해 주세요.</p>;
@@ -379,13 +417,51 @@ function SourceList({ sources }) {
             {source.title}
           </a>
           <span>
-            {source.source_id} · {source.source_type} · {source.category}
+            {source.source_id} · {source.source_type} · {friendlyCategory(source.category)}
+            {source.raw?.relevance_score !== undefined
+              ? ` · relevance ${source.raw.relevance_score}`
+              : ""}
           </span>
           {source.snippet ? <p>{source.snippet}</p> : null}
         </li>
       ))}
     </ul>
   );
+}
+
+function friendlyCollectorName(name) {
+  if (name === "gdelt") {
+    return "GDELT";
+  }
+  return name;
+}
+
+function friendlyCategory(category) {
+  const labels = {
+    competitors: "경쟁 앱",
+    market: "시장/검색 수요",
+    customer_problem: "고객 문제",
+    pricing: "가격/수익화",
+    implementation: "구현/API",
+    pest_political: "정책/규제",
+    pest_economic: "경제/시장",
+    pest_social: "사회/사용자",
+    pest_technological: "기술/구현",
+  };
+  return labels[category] || category;
+}
+
+function friendlyError(message) {
+  if (!message) {
+    return "";
+  }
+  if (message.includes("HTTP Error 429") || message.includes("HTTPError 429")) {
+    return "일시적 요청 제한입니다. 잠시 후 다시 실행하면 회복될 수 있습니다.";
+  }
+  if (message.includes("JSONDecodeError")) {
+    return "Gemini 응답 JSON이 깨져 rule fallback을 사용했습니다.";
+  }
+  return message;
 }
 
 export default App;
