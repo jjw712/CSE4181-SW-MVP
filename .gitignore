@@ -16,6 +16,8 @@ venv/
 *.db
 *.sqlite
 *.sqlite3
+logs/
+outputs/
 
 # Node / Vite
 node_modules/
